@@ -81,7 +81,18 @@ def compute_data_loss(batch, renderings, rays, config):
   if config.disable_multiscale_loss:
     lossmult = jnp.ones_like(lossmult)
 
-  for rendering in renderings:
+  #ii printed:
+  #len(renderings) -> 3
+  #rendering['rgb'].shape -> (8192,1,1,3)
+  #batch.depth.shape -> (8192,1,1)
+
+  for count, rendering in enumerate(renderings):                                              #ii
+    if count == 0:                                                                            #ii
+      print("renderings reached")
+      print("renderings len: ", len(renderings))
+      print("rendering shape: ", rendering['rgb'].shape)
+      print("depth shape: ", batch.depth.shape)
+      print("rendering distance_mean shape: ", rendering['distance_mean'].shape)
     resid_sq = (rendering['rgb'] - batch.rgb[..., :3])**2
     denom = lossmult.sum()
     stats['mses'].append((lossmult * resid_sq).sum() / denom)
@@ -261,7 +272,7 @@ def create_train_step(model: models.Model,
 
       # Indicates whether we need to compute output normal or depth maps in 2D.
       compute_extras = (
-          config.compute_disp_metrics or config.compute_normal_metrics)
+          config.compute_disp_metrics or config.compute_normal_metrics or config.include_depth_images)      #ii
 
       renderings, ray_history = model.apply(
           variables,

@@ -13,19 +13,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+#SBATCH -n 8
+#SBATCH --time=120:00:00
+#SBATCH --mem-per-cpu=2000M
+#SBATCH --tmp=8000
+#SBATCH --job-name=train360
+#SBATCH --output=train360.out
+#SBATCH --error=train360.err
+#SBATCH --gpus=rtx_2080_ti:4
+
 export CUDA_VISIBLE_DEVICES=0
 
-SCENE=gardenvase
+SCENE=living_room_reduced
 EXPERIMENT=360
-DATA_DIR=/usr/local/google/home/barron/tmp/nerf_data/nerf_real_360
-CHECKPOINT_DIR=/usr/local/google/home/barron/tmp/nerf_results/"$EXPERIMENT"/"$SCENE"
+DATA_DIR=/cluster/work/riner/users/PLR-2023/yuayuan/multinerf/data/"$SCENE"
+CHECKPOINT_DIR=/cluster/work/riner/users/PLR-2023/yuayuan/multinerf/temp/nerf_results/"$EXPERIMENT"/"$SCENE"
 
 # If running one of the indoor scenes, add
 # --gin_bindings="Config.factor = 2"
 
 rm "$CHECKPOINT_DIR"/*
+#bash scripts/local_colmap_and_resize.sh ${DATA_DIR}
 python -m train \
   --gin_configs=configs/360.gin \
-  --gin_bindings="Config.data_dir = '${DATA_DIR}/${SCENE}'" \
+  --gin_bindings="Config.data_dir = '${DATA_DIR}'" \
   --gin_bindings="Config.checkpoint_dir = '${CHECKPOINT_DIR}'" \
   --logtostderr

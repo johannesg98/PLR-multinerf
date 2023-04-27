@@ -1,7 +1,9 @@
-Config.dataset_loader = 'llff'
+Config.dataset_loader = 'llffext'           #ii
+Config.include_depth_images = True          #ii
+Config.compute_disp_metrics = False         
 Config.near = 0.2
 Config.far = 1e6
-Config.factor = 4
+Config.factor = 0                           #ii
 
 Model.raydist_fn = @jnp.reciprocal
 Model.opaque_background = True

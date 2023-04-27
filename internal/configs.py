@@ -164,6 +164,9 @@ class Config:
   # For raw test scenes, use affine raw-space color correction.
   eval_raw_affine_cc: bool = False
 
+  #for depth value loss                                                                 #ii
+  include_depth_images: bool = False
+
 
 def define_common_flags():
   # Define the flags used by both train.py and eval.py

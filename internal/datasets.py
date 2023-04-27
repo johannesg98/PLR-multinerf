@@ -45,6 +45,7 @@ def load_dataset(split, train_dir, config):
   dataset_dict = {
       'blender': Blender,
       'llff': LLFF,
+      'llffext': LLFFextendedDepth,
       'tat_nerfpp': TanksAndTemplesNerfPP,
       'tat_fvs': TanksAndTemplesFVS,
       'dtu': DTU,
@@ -111,6 +112,7 @@ class NeRFSceneManager(pycolmap.SceneManager):
     # Get distortion parameters.
     type_ = cam.camera_type
 
+    
     if type_ == 0 or type_ == 'SIMPLE_PINHOLE':
       params = None
       camtype = camera_utils.ProjectionType.PERSPECTIVE
@@ -266,6 +268,7 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
     self._apply_bayer_mask = config.apply_bayer_mask
     self._cast_rays_in_train_step = config.cast_rays_in_train_step
     self._render_spherical = False
+    self._include_depth_images = config.include_depth_images                                  #ii
 
     self.split = utils.DataSplit(split)
     self.data_dir = data_dir
@@ -290,6 +293,8 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
     self.pixtocams: np.ndarray = None
     self.height: int = None
     self.width: int = None
+
+    self.depth_images: np.ndarray = None                                                      #ii
 
     # Load data from disk using provided config parameters.
     self._load_renderings(config)
@@ -446,6 +451,8 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
     if self._load_normals:
       batch['normals'] = self.normal_images[cam_idx, pix_y_int, pix_x_int]
       batch['alphas'] = self.alphas[cam_idx, pix_y_int, pix_x_int]
+    if self._include_depth_images:                                                            #ii                                      
+      batch['depth'] = self.depth_images[cam_idx, pix_y_int, pix_x_int]                       #ii
     return utils.Batch(**batch)
 
   def _next_train(self) -> utils.Batch:
@@ -713,6 +720,179 @@ class LLFF(Dataset):
         self.metadata[key] = self.metadata[key][indices]
 
     self.images = images
+    self.camtoworlds = self.render_poses if config.render_path else poses
+    self.height, self.width = images.shape[1:3]
+
+  
+class LLFFextendedDepth(Dataset):
+  """LLFF Dataset."""
+
+  def _load_renderings(self, config):
+    """Load images from disk."""
+    # Set up scaling factor.
+    image_dir_suffix = ''
+    # Use downsampling factor (unless loading training split for raw dataset,
+    # we train raw at full resolution because of the Bayer mosaic pattern).
+    if config.factor > 0 and not (config.rawnerf_mode and
+                                  self.split == utils.DataSplit.TRAIN):
+      image_dir_suffix = f'_{config.factor}'
+      factor = config.factor
+      raise ValueError("LLFFextendedDepth not specified for higher downsampling factor then 0.")    #ii
+    else:
+      factor = 1
+
+    # Copy COLMAP data to local disk for faster loading.
+    colmap_dir = os.path.join(self.data_dir, 'sparse/0/')
+
+    # Load poses.
+    if utils.file_exists(colmap_dir):
+      pose_data = NeRFSceneManager(colmap_dir).process()
+    else:
+      # Attempt to load Blender/NGP format if COLMAP data not present.
+      pose_data = load_blender_posedata(self.data_dir)
+    image_names, poses, pixtocam, distortion_params, camtype = pose_data
+
+    print("pixtocam: ", pixtocam)
+
+    # Previous NeRF results were generated with images sorted by filename,
+    # use this flag to ensure metrics are reported on the same test set.
+    if config.load_alphabetical:
+      inds = np.argsort(image_names)
+      image_names = [image_names[i] for i in inds]
+      poses = poses[inds]
+
+    # Scale the inverse intrinsics matrix by the image downsampling factor.
+    pixtocam = pixtocam @ np.diag([factor, factor, 1.])
+    self.pixtocams = pixtocam.astype(np.float32)
+    self.focal = 1. / self.pixtocams[0, 0]
+    self.distortion_params = distortion_params
+    self.camtype = camtype
+
+    raw_testscene = False
+    if config.rawnerf_mode:
+      raise ValueError("LLFFextendedDepth not specified for rawnerf_mode.")   #ii
+
+      #Load raw images and metadata.
+      images, metadata, raw_testscene = raw_utils.load_raw_dataset(
+          self.split,
+          self.data_dir,
+          image_names,
+          config.exposure_percentile,
+          factor)
+      self.metadata = metadata
+      
+
+    else:
+      # Load images.
+      colmap_image_dir = os.path.join(self.data_dir, 'images')
+      image_dir = os.path.join(self.data_dir, 'images' + image_dir_suffix)
+      depth_image_dir = os.path.join(self.data_dir, 'depth')                                  #ii
+      for d in [image_dir, colmap_image_dir, depth_image_dir]:                                #ii
+        if not utils.file_exists(d):
+          raise ValueError(f'Image folder {d} does not exist.')
+      # Downsampled images may have different names vs images used for COLMAP,
+      # so we need to map between the two sorted lists of files.
+      colmap_files = sorted(utils.listdir(colmap_image_dir))
+      image_files = sorted(utils.listdir(image_dir))
+      depth_image_files = sorted(utils.listdir(depth_image_dir))                              #ii
+      colmap_to_image = dict(zip(colmap_files, image_files))
+      image_paths = [os.path.join(image_dir, colmap_to_image[f])
+                     for f in image_names]
+      colmap_to_depth_image = dict(zip(colmap_files, depth_image_files))                      #ii
+      depth_image_paths = [os.path.join(depth_image_dir, colmap_to_depth_image[f])            #ii
+                     for f in image_names]
+      images = [utils.load_img(x) for x in image_paths]
+      images = np.stack(images, axis=0) / 255.
+      depth_images = [utils.load_img(x) for x in depth_image_paths]                           #ii
+      depth_images = np.stack(depth_images, axis=0)                                           #ii
+
+      # EXIF data is usually only present in the original JPEG images.
+      jpeg_paths = [os.path.join(colmap_image_dir, f) for f in image_names]
+      exifs = [utils.load_exif(x) for x in jpeg_paths]
+      self.exifs = exifs
+      if 'ExposureTime' in exifs[0] and 'ISOSpeedRatings' in exifs[0]:
+        gather_exif_value = lambda k: np.array([float(x[k]) for x in exifs])
+        shutters = gather_exif_value('ExposureTime')
+        isos = gather_exif_value('ISOSpeedRatings')
+        self.exposures = shutters * isos / 1000.
+
+    # Load bounds if possible (only used in forward facing scenes).
+    posefile = os.path.join(self.data_dir, 'poses_bounds.npy')
+    if utils.file_exists(posefile):
+      with utils.open_file(posefile, 'rb') as fp:
+        poses_arr = np.load(fp)
+      bounds = poses_arr[:, -2:]
+    else:
+      bounds = np.array([0.01, 1.])
+    self.colmap_to_world_transform = np.eye(4)
+
+    # Separate out 360 versus forward facing scenes.
+    if config.forward_facing:
+      raise ValueError("LLFFextendedDepth not specified for forward_facing.")                 #ii
+      # Set the projective matrix defining the NDC transformation.
+      self.pixtocam_ndc = self.pixtocams.reshape(-1, 3, 3)[0]
+      # Rescale according to a default bd factor.
+      scale = 1. / (bounds.min() * .75)
+      poses[:, :3, 3] *= scale
+      self.colmap_to_world_transform = np.diag([scale] * 3 + [1])
+      bounds *= scale
+      # Recenter poses.
+      poses, transform = camera_utils.recenter_poses(poses)
+      self.colmap_to_world_transform = (
+          transform @ self.colmap_to_world_transform)
+      # Forward-facing spiral render path.
+      self.render_poses = camera_utils.generate_spiral_path(
+          poses, bounds, n_frames=config.render_path_frames)
+    else:
+      # Rotate/scale poses to align ground with xy plane and fit to unit cube.
+      poses, transform, scale_factor = camera_utils.transform_poses_pca_return_scale(poses)   #ii
+      self.colmap_to_world_transform = transform
+      if config.render_spline_keyframes is not None:
+        rets = camera_utils.create_render_spline_path(config, image_names,
+                                                      poses, self.exposures)
+        self.spline_indices, self.render_poses, self.render_exposures = rets
+      else:
+        # Automatically generated inward-facing elliptical render path.
+        self.render_poses = camera_utils.generate_ellipse_path(
+            poses,
+            n_frames=config.render_path_frames,
+            z_variation=config.z_variation,
+            z_phase=config.z_phase)
+
+    if raw_testscene:
+      # For raw testscene, the first image sent to COLMAP has the same pose as
+      # the ground truth test image. The remaining images form the training set.
+      raw_testscene_poses = {
+          utils.DataSplit.TEST: poses[:1],
+          utils.DataSplit.TRAIN: poses[1:],
+      }
+      poses = raw_testscene_poses[self.split]
+
+    self.poses = poses
+
+    # Select the split.
+    all_indices = np.arange(images.shape[0])
+    if config.llff_use_all_images_for_training or raw_testscene:
+      train_indices = all_indices
+    else:
+      train_indices = all_indices % config.llffhold != 0
+    split_indices = {
+        utils.DataSplit.TEST: all_indices[all_indices % config.llffhold == 0],
+        utils.DataSplit.TRAIN: train_indices,
+    }
+    indices = split_indices[self.split]
+    # All per-image quantities must be re-indexed using the split indices.
+    images = images[indices]
+    depth_images = depth_images[indices]                                                      #ii
+    poses = poses[indices]
+    if self.exposures is not None:
+      self.exposures = self.exposures[indices]
+    if config.rawnerf_mode:
+      for key in ['exposure_idx', 'exposure_values']:
+        self.metadata[key] = self.metadata[key][indices]
+
+    self.images = images
+    self.depth_images = depth_images                                                          #ii
     self.camtoworlds = self.render_poses if config.render_path else poses
     self.height, self.width = images.shape[1:3]
 

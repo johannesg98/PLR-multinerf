@@ -87,6 +87,7 @@ class Batch:
   disps: Optional[_Array] = None
   normals: Optional[_Array] = None
   alphas: Optional[_Array] = None
+  depth: Optional[_Array] = None                                                              #ii
 
 
 class DataSplit(enum.Enum):
