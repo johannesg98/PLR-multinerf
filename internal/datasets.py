@@ -745,14 +745,33 @@ class LLFFextendedDepth(Dataset):
     colmap_dir = os.path.join(self.data_dir, 'sparse/0/')
 
     # Load poses.
-    if utils.file_exists(colmap_dir):
-      pose_data = NeRFSceneManager(colmap_dir).process()
-    else:
-      # Attempt to load Blender/NGP format if COLMAP data not present.
-      pose_data = load_blender_posedata(self.data_dir)
-    image_names, poses, pixtocam, distortion_params, camtype = pose_data
+    # if utils.file_exists(colmap_dir):
+    #   pose_data = NeRFSceneManager(colmap_dir).process()
+    # else:
+    #   # Attempt to load Blender/NGP format if COLMAP data not present.
+    #   pose_data = load_blender_posedata(self.data_dir)
+    # image_names, poses, pixtocam, distortion_params, camtype = pose_data
 
-    print("pixtocam: ", pixtocam)
+    #load ground truth poses and intrinsics                                                       	#ii and the part below
+    traj_file_dir = os.path.join(self.data_dir, 'livingroomTraj.txt')
+    intr = np.array([])                                                                             
+    poses = np.array([])
+    with open(traj_file_dir) as f:
+      poses = np.zeros([int((len(f.readlines()) - 1) * 3 / 5), 4])
+
+    with open(traj_file_dir) as f:
+      for i, line in enumerate(f.readlines()):
+        if i == 0:
+          intr = np.fromstring(line, dtype=float, sep=' ')
+        elif i % 5 == 2 or i % 5 == 3 or i % 5 == 4:
+          poses[i - int(i/5 + 1)*2,:] = np.fromstring(line, dtype=float, sep=' ')
+    poses = poses.reshape((-1,3,4))
+
+    pixtocam = np.linalg.inv(camera_utils.intrinsic_matrix(intr[0], intr[1], intr[2], intr[3]))     #ii
+    camtype = camera_utils.ProjectionType.PERSPECTIVE                                               #ii
+    distortion_params = None                                                                        #ii
+    image_dir = os.path.join(self.data_dir, 'images')                                               #ii
+    image_names = os.listdir(image_dir)                                                             #ii
 
     # Previous NeRF results were generated with images sorted by filename,
     # use this flag to ensure metrics are reported on the same test set.
@@ -770,7 +789,7 @@ class LLFFextendedDepth(Dataset):
 
     raw_testscene = False
     if config.rawnerf_mode:
-      raise ValueError("LLFFextendedDepth not specified for rawnerf_mode.")   #ii
+      raise ValueError("LLFFextendedDepth not specified for rawnerf_mode.")                         #ii
 
       #Load raw images and metadata.
       images, metadata, raw_testscene = raw_utils.load_raw_dataset(
@@ -846,6 +865,7 @@ class LLFFextendedDepth(Dataset):
     else:
       # Rotate/scale poses to align ground with xy plane and fit to unit cube.
       poses, transform, scale_factor = camera_utils.transform_poses_pca_return_scale(poses)   #ii
+      depth_images *= scale_factor                                                            #ii
       self.colmap_to_world_transform = transform
       if config.render_spline_keyframes is not None:
         rets = camera_utils.create_render_spline_path(config, image_names,
@@ -893,6 +913,7 @@ class LLFFextendedDepth(Dataset):
 
     self.images = images
     self.depth_images = depth_images                                                          #ii
+    print("whoop image-dim depth-dim: ", self.images.shape, self.depth_images.shape)
     self.camtoworlds = self.render_poses if config.render_path else poses
     self.height, self.width = images.shape[1:3]
 
