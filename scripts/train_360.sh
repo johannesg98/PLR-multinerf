@@ -18,16 +18,16 @@
 #SBATCH --mem-per-cpu=2000M
 #SBATCH --tmp=8000
 #SBATCH --job-name=train360
-#SBATCH --output=train360.out
-#SBATCH --error=train360.err
+#SBATCH --output=output/train360.out
+#SBATCH --error=output/train360.err
 #SBATCH --gpus=rtx_2080_ti:4
 
 export CUDA_VISIBLE_DEVICES=0
 
 SCENE=living_room_reduced
 EXPERIMENT=360
-DATA_DIR=/cluster/work/riner/users/PLR-2023/yuayuan/multinerf/data/"$SCENE"
-CHECKPOINT_DIR=/cluster/work/riner/users/PLR-2023/yuayuan/multinerf/temp/nerf_results/"$EXPERIMENT"/"$SCENE"
+DATA_DIR=/cluster/work/riner/users/PLR-2023/jgaber/PLR-multinerf/data/"$SCENE"
+CHECKPOINT_DIR=/cluster/work/riner/users/PLR-2023/jgaber/PLR-multinerf/temp/nerf_results/"$EXPERIMENT"/"$SCENE"
 
 # If running one of the indoor scenes, add
 # --gin_bindings="Config.factor = 2"

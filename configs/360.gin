@@ -4,8 +4,8 @@ Config.compute_disp_metrics = False
 Config.near = 0.2
 Config.far = 1e6
 Config.factor = 0                           #ii
-Config:batch_size = 500                     #ii
-Config.checkpoint_every = 5000              #ii
+Config.batch_size = 500                     #ii
+Config.checkpoint_every = 15000              #ii
 
 Model.raydist_fn = @jnp.reciprocal
 Model.opaque_background = True
