@@ -34,6 +34,8 @@ from jax import random
 import jax.numpy as jnp
 import optax
 
+import numpy as np                                                                            #ii
+
 
 def tree_sum(tree):
   return jax.tree_util.tree_reduce(lambda x, y: x + y, tree, initializer=0)
@@ -93,7 +95,7 @@ def compute_data_loss(batch, renderings, rays, config):
       print("rendering shape: ", rendering['rgb'].shape)
       print("depth shape: ", batch.depth.shape)
       print("rendering distance_mean shape: ", rendering['distance_mean'].shape)
-    resid_sq = (rendering['rgb'] - batch.rgb[..., :3])**2
+    resid_sq = (rendering['rgb'] - batch.rgb[..., :3])**2 + config.depth_weight * (np.where(batch.depth != 0, rendering['distance_mean'], np.zeros(rendering['distance_mean'].shape)) - batch.depth)**2     #ii   where: delete data in rendering, where zeros in batch(no data available) -> if no data: calculate no loss
     denom = lossmult.sum()
     stats['mses'].append((lossmult * resid_sq).sum() / denom)
 

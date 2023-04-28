@@ -442,17 +442,21 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
           self.cameras, pixels, self.camtype, xnp=np)
 
     # Create data batch.
+    #print("dim images depth: ", self.images.shape, self.depth_images.shape)
+    #print("camidx, render_path, include depth images: ", cam_idx, self.render_path, self._include_depth_images)
+    print("lolololllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll")
     batch = {}
     batch['rays'] = rays
     if not self.render_path:
       batch['rgb'] = self.images[cam_idx, pix_y_int, pix_x_int]
+      batch['depth'] = self.depth_images[cam_idx, pix_y_int, pix_x_int]                       #ii
     if self._load_disps:
       batch['disps'] = self.disp_images[cam_idx, pix_y_int, pix_x_int]
     if self._load_normals:
       batch['normals'] = self.normal_images[cam_idx, pix_y_int, pix_x_int]
       batch['alphas'] = self.alphas[cam_idx, pix_y_int, pix_x_int]
-    if self._include_depth_images:                                                            #ii                                      
-      batch['depth'] = self.depth_images[cam_idx, pix_y_int, pix_x_int]                       #ii
+    #if self._include_depth_images:                                                            #ii                                      
+    #  batch['depth'] = self.depth_images[cam_idx, pix_y_int, pix_x_int]                       #ii
     return utils.Batch(**batch)
 
   def _next_train(self) -> utils.Batch:
@@ -913,7 +917,7 @@ class LLFFextendedDepth(Dataset):
 
     self.images = images
     self.depth_images = depth_images                                                          #ii
-    print("whoop image-dim depth-dim: ", self.images.shape, self.depth_images.shape)
+    #print("whoop image-dim depth-dim: ", self.images.shape, self.depth_images.shape)
     self.camtoworlds = self.render_poses if config.render_path else poses
     self.height, self.width = images.shape[1:3]
 

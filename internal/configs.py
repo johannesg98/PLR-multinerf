@@ -77,6 +77,9 @@ class Config:
   # Decimate images for tensorboard (ie, x[::d, ::d]) to conserve memory usage.
   vis_decimate: int = 0
 
+  #Depth images
+  depth_weight: float = 1 #weigth for depth images in data loss                                     #ii
+
   # Only used by train.py:
   max_steps: int = 250000  # The number of optimization steps.
   early_exit_steps: Optional[int] = None  # Early stopping, for debugging.
