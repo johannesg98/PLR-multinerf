@@ -95,7 +95,7 @@ def compute_data_loss(batch, renderings, rays, config):
       print("rendering shape: ", rendering['rgb'].shape)
       print("depth shape: ", batch.depth.shape)
       print("rendering distance_mean shape: ", rendering['distance_mean'].shape)
-    resid_sq = (rendering['rgb'] - batch.rgb[..., :3])**2 + config.depth_weight * (np.where(batch.depth != 0, rendering['distance_mean'], np.zeros(rendering['distance_mean'].shape)) - batch.depth)**2     #ii   where: delete data in rendering, where zeros in batch(no data available) -> if no data: calculate no loss
+    resid_sq = (rendering['rgb'] - batch.rgb[..., :3])**2 + config.depth_weight * (jnp.where(batch.depth != 0, rendering['distance_mean'], jnp.zeros(rendering['distance_mean'].shape)) - batch.depth)**2     #ii   where: delete data in rendering, where zeros in batch(no data available) -> if no data: calculate no loss
     denom = lossmult.sum()
     stats['mses'].append((lossmult * resid_sq).sum() / denom)
 
