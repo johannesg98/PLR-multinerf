@@ -87,15 +87,29 @@ def compute_data_loss(batch, renderings, rays, config):
   #len(renderings) -> 3
   #rendering['rgb'].shape -> (8192,1,1,3)
   #batch.depth.shape -> (8192,1,1)
+  #rendering['distance_mean'].shape ->  (500, 1, 1)
+  #batch.rgb.shape ->  (500, 1, 1, 3)
 
   for count, rendering in enumerate(renderings):                                              #ii
-    if count == 0:                                                                            #ii
-      print("renderings reached")
-      print("renderings len: ", len(renderings))
-      print("rendering shape: ", rendering['rgb'].shape)
-      print("depth shape: ", batch.depth.shape)
-      print("rendering distance_mean shape: ", rendering['distance_mean'].shape)
+    #if count == 0:                                                                            #ii
+      #print("renderings reached")
+      #print("renderings len: ", len(renderings))
+      #print("rendering shape: ", rendering['rgb'].shape)
+      #print("depth shape: ", batch.depth.shape)
+      #print("rendering distance_mean shape: ", rendering['distance_mean'].shape)
+      #print("batch.rgb.shape: ", batch.rgb.shape)
     resid_sq = (rendering['rgb'] - batch.rgb[..., :3])**2 + config.depth_weight * (jnp.where(batch.depth != 0, rendering['distance_mean'], jnp.zeros(rendering['distance_mean'].shape)) - batch.depth)**2     #ii   where: delete data in rendering, where zeros in batch(no data available) -> if no data: calculate no loss
+    
+    # a = rendering['distance_mean'].block_until_ready()
+    # b = batch.depth.block_until_ready()
+    # print("distance_mean and bath.depth: ")
+    # print("count: ", count)
+    # print("shape of distancemean bathcdepth: ", a.shape, b.shape)
+    # print(a.mean())
+    # print(b.mean())
+    # print(a)
+    # print(b)
+
     denom = lossmult.sum()
     stats['mses'].append((lossmult * resid_sq).sum() / denom)
 

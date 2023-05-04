@@ -444,7 +444,7 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
     # Create data batch.
     #print("dim images depth: ", self.images.shape, self.depth_images.shape)
     #print("camidx, render_path, include depth images: ", cam_idx, self.render_path, self._include_depth_images)
-    print("lolololllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll")
+    #print("lolololllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll")
     batch = {}
     batch['rays'] = rays
     if not self.render_path:
@@ -754,7 +754,7 @@ class LLFFextendedDepth(Dataset):
     # else:
     #   # Attempt to load Blender/NGP format if COLMAP data not present.
     #   pose_data = load_blender_posedata(self.data_dir)
-    # image_names, poses, pixtocam, distortion_params, camtype = pose_data
+    # image_namesC, posesC, pixtocam, distortion_params, camtype = pose_data
 
     #load ground truth poses and intrinsics                                                       	#ii and the part below
     traj_file_dir = os.path.join(self.data_dir, 'livingroomTraj.txt')
@@ -771,18 +771,43 @@ class LLFFextendedDepth(Dataset):
           poses[i - int(i/5 + 1)*2,:] = np.fromstring(line, dtype=float, sep=' ')
     poses = poses.reshape((-1,3,4))
 
+    # print("posesCOLMAP unsorted: ", posesC)
+    # print("posesSELF   unsorted: ", poses)
+    # print("posesCOLMAP shape: ", posesC.shape)
+    # print("posesSELF   shape: ", poses.shape)
+
+
+    poses = poses @ np.diag([1, -1, -1, 1])
+    
+
+    #print("pixtocam from COLMAP: ", pixtocam, distortion_params, camtype)
+
     pixtocam = np.linalg.inv(camera_utils.intrinsic_matrix(intr[0], intr[1], intr[2], intr[3]))     #ii
     camtype = camera_utils.ProjectionType.PERSPECTIVE                                               #ii
     distortion_params = None                                                                        #ii
+
+    #print("pixtocam from SELF  : ", pixtocam, distortion_params, camtype)
+    
     image_dir = os.path.join(self.data_dir, 'images')                                               #ii
     image_names = os.listdir(image_dir)                                                             #ii
 
+    #print("images names from SELF unsorted  : ", image_names)
+
+    inds = np.argsort(image_names)                                                                  #ii
+    image_names = [image_names[i] for i in inds]                                                    #ii
+
+    #print("images names from SELF sorted    : ", image_names)
+    
+    #print("images names from COLMAP unsorted: ", image_namesC)
     # Previous NeRF results were generated with images sorted by filename,
     # use this flag to ensure metrics are reported on the same test set.
-    if config.load_alphabetical:
-      inds = np.argsort(image_names)
-      image_names = [image_names[i] for i in inds]
-      poses = poses[inds]
+    # if config.load_alphabetical:
+    #   inds = np.argsort(image_namesC)
+    #   image_namesC = [image_namesC[i] for i in inds]
+    #   posesC = posesC[inds]
+
+    #print("images names from COLMAP sorted  : ", image_namesC)
+    #print("posesCOLMAP   sorted: ", posesC)
 
     # Scale the inverse intrinsics matrix by the image downsampling factor.
     pixtocam = pixtocam @ np.diag([factor, factor, 1.])
@@ -869,7 +894,7 @@ class LLFFextendedDepth(Dataset):
     else:
       # Rotate/scale poses to align ground with xy plane and fit to unit cube.
       poses, transform, scale_factor = camera_utils.transform_poses_pca_return_scale(poses)   #ii
-      depth_images *= scale_factor                                                            #ii
+      depth_images *= scale_factor/1000                                                       #ii
       self.colmap_to_world_transform = transform
       if config.render_spline_keyframes is not None:
         rets = camera_utils.create_render_spline_path(config, image_names,
