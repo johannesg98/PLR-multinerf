@@ -71,6 +71,25 @@ class Model(nn.Module):
   use_gpu_resampling: bool = False  # Use gather ops for faster GPU resampling.
   opaque_background: bool = False  # If true, make the background opaque.
 
+  # def setup(self):                                                                          #ii
+  #   print("inside setup of Model..")
+  #   self.MLP = NerfMLP()
+  #   print("..jupdi worked")
+      ####################AttributeError: "Model" object has no attribute "MLP". If "MLP" is defined in '.setup()', remember these fields are only accessible from inside 'init' or 'apply'.
+
+
+
+    # MLP = NerfMLP()
+    # key = random.PRNGKey(20200823)
+    # mean = jnp.array([[[0,0,0],[1,1,1]]])
+    # cov = jnp.array([[[1,1,1],[1,1,1]]])
+    # gaussians = (mean, cov)
+    # results = MLP(key, gaussians)
+    
+    # print("lol")
+    # print(results['density'])
+    ####################Can't call compact methods on unbound modules
+
   @nn.compact
   def __call__(
       self,
@@ -79,6 +98,7 @@ class Model(nn.Module):
       train_frac,
       compute_extras,
       zero_glo=True,
+      #gaussians = None,                                                                       #ii
   ):
     """The mip-NeRF Model.
 
@@ -93,8 +113,19 @@ class Model(nn.Module):
       ret: list, [*(rgb, distance, acc)]
     """
 
+    # if gaussians != None:                                                                     #ii
+    #   mlp = NerfMLP()
+    #   results = mlp(rng, gaussians)
+    #   return results
+    ################################AttributeError: 'ArrayImpl' object has no attribute 'items'
+
+
     # Construct MLPs. WARNING: Construction order may matter, if MLP weights are
     # being regularized.
+
+    print("entered MLP!")
+
+
     nerf_mlp = NerfMLP()
     prop_mlp = nerf_mlp if self.single_mlp else PropMLP()
 
@@ -229,6 +260,29 @@ class Model(nn.Module):
           exposure=rays.exposure_values,
       )
 
+      print("try to do stuff")
+
+      meant = jnp.array([0.0,0.0,0.0])                                                  #ii
+      covt = jnp.array([[1,0.1,0.1],[0.1,1,0.1],[0.1,0.1,1]])
+      #covt = jnp.array([1,1,1]) 
+      print(covt)
+
+      gaussianst = (meant, covt)
+
+      ray_resultst = mlp(
+          key,
+          gaussianst#,
+          #viewdirs=rays.viewdirs if self.use_viewdirs else None,
+          #imageplane=rays.imageplane,
+          #glo_vec=None if is_prop else glo_vec,
+          #exposure=rays.exposure_values,
+      )
+
+      print("maybe created?...")
+
+      print("density: ", ray_resultst['density'])
+
+
       # Get the weights used by volumetric rendering (and our other losses).
       weights = render.compute_alpha_weights(
           ray_results['density'],
@@ -310,6 +364,10 @@ class Model(nn.Module):
         renderings[i]['ray_rgbs'] = avg_rgbs[i]
 
     return renderings, ray_history
+  
+
+  # def setupMLPforModelextraction(self):                                                         #ii
+  #   self.MLP = NerfMLP()                                                                        #ii
 
 
 def construct_model(rng, rays, config):
@@ -432,6 +490,7 @@ class MLP(nn.Module):
       normals_pred: jnp.ndarray(float32), with a shape of [..., 3], or None.
       roughness: jnp.ndarray(float32), with a shape of [..., 1], or None.
     """
+
 
     dense_layer = functools.partial(
         nn.Dense, kernel_init=getattr(jax.nn.initializers, self.weight_init)())

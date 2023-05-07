@@ -79,6 +79,7 @@ class Config:
 
   #Depth images
   depth_weight: float = 1 #weigth for depth images in data loss                                     #ii
+  extractModel_dir: Optional[str] = None  # Output of extracted mesh model directory.               #ii
 
   # Only used by train.py:
   max_steps: int = 250000  # The number of optimization steps.
